@@ -17,6 +17,7 @@ Matching is done based on writing the filename in the "alt text" of the image ob
 # Privacy policy
 
 slidder needs read-write access to your Google Slides in order to do its job.
-It also needs read access your Drive to find Slides presentations by name.
+It also needs read-write access your Drive to find Slides presentations by name and to upload
+your plots temporarily.
 
 These data are only used during the duration of the command execution and are not abused.
