@@ -13,6 +13,10 @@ slidder takes a Slides presentation and a directory, and updates matching plots.
 
 Matching is done based on writing the filename in the "alt text" of the image object.
 
+# TODOs
+
+- [ ] re-set the alt text / description
+
 
 # Privacy policy
 
