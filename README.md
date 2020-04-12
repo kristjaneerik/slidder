@@ -24,7 +24,6 @@ of the image object in the Slides presentation.
       annotating them in the Description field
 - [ ] error handling of all GAPI requests
 - [ ] LICENSE file
-- [ ] get presentation by name, not just by ID
 
 
 # Privacy policy

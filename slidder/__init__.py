@@ -15,6 +15,7 @@ SCOPES = [
 
 img_file_pattern = "png|jpg|jpeg|gif|PNG|JPG|JPEG|GIF"
 slidderpath_regex = re.compile(rf"path=([^\s]*\.(?:{img_file_pattern}))")
+document_id_regex = re.compile("1[a-zA-Z0-9-_]{43}")
 
 
 class GAPI(object):
@@ -42,10 +43,25 @@ class GAPI(object):
         self.slides_service = build("slides", "v1", credentials=self.creds)
         self.drive_service = build("drive", "v3", credentials=self.creds)
 
-    def get_presentation(self, presentation_id):
+    def get_presentation(self, presentation_id_or_name):
+        if document_id_regex.match(presentation_id_or_name) is not None:
+            presentation_id = presentation_id_or_name
+        else:
+            response = self.drive_service.files().list(
+                q=f"name='{presentation_id_or_name}'",
+            ).execute()
+            files = [f["id"] for f in response["files"]]
+            if len(files) == 0:
+                raise RuntimeError(f"Found no presentations matching '{presentation_id_or_name}'")
+            if len(files) > 1:
+                links = ", ".join(f"https://drive.google.com/open?id={f}" for f in files)
+                raise RuntimeError(
+                    f"Found multiple files matching '{presentation_id_or_name}': {links}"
+                )
+            presentation_id = files[0]
         return self.slides_service.presentations().get(presentationId=presentation_id).execute()
 
-    def upload_image(self, localpath):
+    def upload_image(self, localpath, verbose=False):
         file_metadata = {
             "name": localpath,
             # "parents": ["appDataFolder"],
@@ -58,7 +74,8 @@ class GAPI(object):
             body=file_metadata, media_body=media, fields="id",
         ).execute()
         obj_id = file_obj["id"]
-        print(f"Uploaded {localpath} -> {obj_id}")
+        if verbose:
+            print(f"Uploaded {localpath} -> {obj_id}")
         return obj_id, self.get_uploaded_image_url(obj_id)
 
     def get_uploaded_image_url(self, drive_id):
@@ -87,14 +104,14 @@ class GAPI(object):
 
 
 def main(
-    presentation_id,
+    presentation_id_or_name,
     directory="./",
     debug=True,
 ):
     """
     """
     gapi = GAPI()
-    presentation = gapi.get_presentation(presentation_id)
+    presentation = gapi.get_presentation(presentation_id_or_name)
     slides = presentation.get("slides")
 
     if debug:
@@ -154,12 +171,11 @@ def main(
 
     response = None
     if requests:
-        print("Have requests:")
-        print(requests)
+        if debug:
+            print(f"Have requests:\n{requests}")
         response = gapi.slides_service.presentations().batchUpdate(
-            presentationId=presentation_id, body={"requests": requests},
+            presentationId=presentation["presentationId"], body={"requests": requests},
         ).execute()
-        # print(response)
 
     gapi.remove_files(drive_file_ids)  # remove all uploaded files from the app directory
 
