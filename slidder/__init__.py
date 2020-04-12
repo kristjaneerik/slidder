@@ -3,6 +3,8 @@ import pickle
 import os.path
 import re
 import mimetypes
+import hashlib
+import urllib
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -13,8 +15,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]  # read-write for all Slides (so that we can add images) and Drive (so that we can upload images)
 
-img_file_pattern = "png|jpg|jpeg|gif|PNG|JPG|JPEG|GIF"
-slidderpath_regex = re.compile(rf"path=([^\s]*\.(?:{img_file_pattern}))")
+img_file_regex = re.compile("([^\s]*\.(?:png|jpg|jpeg|gif|PNG|JPG|JPEG|GIF))")
+slidderpath_regex = re.compile(rf"path={img_file_regex.pattern}")
 document_id_regex = re.compile("1[a-zA-Z0-9-_]{43}")
 
 
@@ -103,19 +105,41 @@ class GAPI(object):
         ).execute()
 
 
+def get_file_hash(filename, buf_size=65536):
+    hasher = hashlib.sha1()
+    if filename.startswith("http"):
+        fp = urllib.request.urlopen(filename)
+    else:
+        fp = open(filename, "rb")
+    while True:
+        data = fp.read(buf_size)
+        if not data:
+            break
+        hasher.update(data)
+    fp.close()
+    return hasher.hexdigest()
+
+
 def main(
     presentation_id_or_name,
     directory="./",
     debug=True,
 ):
-    """
+    """slidder: the Google Slides image updater
+
+    Given a presentation `presentation_id_or_name` (either a 44-character string starting with 1
+    that you can find in the URL of your presentation) or a document name (must be unique),
+    replace annotated images with files from the given `directory`.
+    Images are annotated with a string pointing to their path with a string like
+    "path=./my/path/image.png" in the image description, which you see when you
+    right click on the image in Slides -> Alt text -> Description.
     """
     gapi = GAPI()
     presentation = gapi.get_presentation(presentation_id_or_name)
     slides = presentation.get("slides")
-
     if debug:
         print(f"The presentation contains {len(slides)} slides")
+
     requests = []
     uploaded_files = {}
     for s, slide in enumerate(slides, start=1):
@@ -126,15 +150,15 @@ def main(
             title = image.get("title", "")
             desc = image.get("description", "")
             url = image.get("image", {}).get("contentUrl")
-            files = slidderpath_regex.findall(desc)
-            if len(files) != 1:
-                if len(files) > 1:
+            annotated_files = slidderpath_regex.findall(desc)
+            if len(annotated_files) != 1:
+                if len(annotated_files) > 1:
                     print(
                         f"Slide #{s} has an image with multiple definitions of path=...: "
-                        f"{'; '.join(files)} -- skipping!"
+                        f"{'; '.join(annotated_files)} -- skipping!"
                     )
                 continue
-            raw_fname = files[0]
+            raw_fname = annotated_files[0]
             fname = os.path.join(directory, raw_fname)
             if debug:
                 print(f"{img_id} on slide #{s} ({slide_id}): {url} -> {raw_fname} -> {fname}")
@@ -173,11 +197,66 @@ def main(
     if requests:
         if debug:
             print(f"Have requests:\n{requests}")
-        response = gapi.slides_service.presentations().batchUpdate(
+        gapi.slides_service.presentations().batchUpdate(
             presentationId=presentation["presentationId"], body={"requests": requests},
         ).execute()
 
     gapi.remove_files(drive_file_ids)  # remove all uploaded files from the app directory
+
+
+def id_images(
+    presentation_id_or_name,
+    directory=".",
+):
+    """Find images in the presentation and try to match them with local files.
+    """
+    raise RuntimeError("Not implemented")
+
+    gapi = GAPI()
+    presentation = gapi.get_presentation(presentation_id_or_name)
+    slides = presentation.get("slides")
+
+    # find hashes for all local files
+    hashes = {}
+    for dirpath, dirnames, filenames in os.walk(directory):
+        for f in filenames:
+            f = os.path.join(dirpath, f)
+            if img_file_regex.match(f) is not None:
+                file_hash = get_file_hash(f)
+                if file_hash in hashes:
+                    print(
+                        f"WARNING: have two files with hash {file_hash}: "
+                        f"{hashes[file_hash]} and {f}; using the first one to annotate"
+                    )
+                    continue
+                hashes[file_hash] = f
+    for h, f in sorted(hashes.items()):
+        print(f"{h}\t{f}")
+
+    for s, slide in enumerate(slides, start=1):
+        images = [el for el in slide.get("pageElements", []) if "image" in el]
+        slide_id = slide.get("objectId")
+        for image in images:
+            img_id = image.get("objectId")
+            title = image.get("title", "")
+            desc = image.get("description", "")
+            url = image.get("image", {}).get("contentUrl")
+            annotated_files = slidderpath_regex.findall(desc)
+            if len(annotated_files) > 1:
+                print(
+                    f"WARNING: Slide #{s} has an image with multiple definitions of path=...: "
+                    f"{'; '.join(annotated_files)}"
+                )
+                continue
+            img_hash = get_file_hash(url)
+            print(f"Found image on slide {s}: hashes to {img_hash} (URL: {url})")
+            # hmm, looks like the images get processed a bit, so this hash-based approach
+            # won't work
+            # TODO
+
+            if len(annotated_files) == 1:
+                # already have an annotation: need to check it's the same
+                pass
 
 
 if __name__ == "__main__":

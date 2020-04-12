@@ -15,6 +15,8 @@ from files within that directory.
 Matching is done based on writing the filename in the "alt text" description part
 of the image object in the Slides presentation.
 
+*NOTE:* for technical reasons, filenames (including path) CANNOT have spaces in them.
+
 # TODOs
 
 - [ ] proper installation
