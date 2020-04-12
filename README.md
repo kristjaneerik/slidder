@@ -17,6 +17,7 @@ Matching is done based on writing the filename in the "alt text" of the image ob
 
 - [ ] re-set the alt text / description
 - [ ] proper installation
+- [ ] example / readme on usage
 
 
 # Privacy policy
