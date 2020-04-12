@@ -46,9 +46,8 @@ class GAPI(object):
         return self.slides_service.presentations().get(presentationId=presentation_id).execute()
 
     def upload_image(self, localpath):
-        file_hash = get_file_hash(localpath)
         file_metadata = {
-            "name": file_hash,
+            "name": localpath,
             # "parents": ["appDataFolder"],
         }
         mimetype = mimetypes.guess_type(localpath)[0]
@@ -59,7 +58,7 @@ class GAPI(object):
             body=file_metadata, media_body=media, fields="id",
         ).execute()
         obj_id = file_obj["id"]
-        print(f"Uploaded {localpath} -> {file_hash} -> {obj_id}")
+        print(f"Uploaded {localpath} -> {obj_id}")
         return obj_id, self.get_uploaded_image_url(obj_id)
 
     def get_uploaded_image_url(self, drive_id):
@@ -87,10 +86,6 @@ class GAPI(object):
         ).execute()
 
 
-def get_file_hash(localpath):
-    return localpath  # TODO
-
-
 def main(
     presentation_id,
     directory="./",
@@ -106,24 +101,29 @@ def main(
         print(f"The presentation contains {len(slides)} slides")
     requests = []
     uploaded_files = {}
-    for slide in slides:
+    for s, slide in enumerate(slides, start=1):
         images = [el for el in slide.get("pageElements", []) if "image" in el]
         slide_id = slide.get("objectId")
         for image in images:
             img_id = image.get("objectId")
+            title = image.get("title", "")
             desc = image.get("description", "")
-            # TODO need to re-set the description!
             url = image.get("image", {}).get("contentUrl")
             files = slidderpath_regex.findall(desc)
             if len(files) != 1:
+                if len(files) > 1:
+                    print(
+                        f"Slide #{s} has an image with multiple definitions of path=...: "
+                        f"{'; '.join(files)} -- skipping!"
+                    )
                 continue
             raw_fname = files[0]
             fname = os.path.join(directory, raw_fname)
             if debug:
-                print(f"{img_id} on slide {slide_id}: {url} -> {raw_fname} -> {fname}")
+                print(f"{img_id} on slide #{s} ({slide_id}): {url} -> {raw_fname} -> {fname}")
             if not os.path.isfile(fname):
                 print(
-                    f"Tried to find {fname}, but didn't find it "
+                    f"Tried to find {fname} (on slide #{s}), but didn't find it "
                     f"(looked for {raw_fname} in {directory})!"
                 )
                 continue
@@ -138,6 +138,13 @@ def main(
                     "imageReplaceMethod": "CENTER_CROP",
                     "url": remote_url,
                 }
+            })
+            requests.append({  # replaceImage resets these to "" for some reason
+                "updatePageElementAltText": {
+                    "objectId": img_id,
+                    "title": title,
+                    "description": desc,
+                },
             })
 
     drive_file_ids = [f["file_id"] for f in uploaded_files.values()]

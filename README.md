@@ -2,22 +2,29 @@
 
 slid[i]der [the i is silent] aka slide image updater
 
-Does this ever happen to you?
+*Does this ever happen to you?*
 
 You are working on a presentation with 50 slides and 75 plots that you've generated,
 but now the boss wants to change all the colors to purple.
 
 With slidder you can easily update all the figures in your presentation with the push of a button!
 
-slidder takes a Slides presentation and a directory, and updates matching plots.
+slidder takes a Slides presentation and a local directory, and updates plots in the presentation
+from files within that directory.
 
-Matching is done based on writing the filename in the "alt text" of the image object.
+Matching is done based on writing the filename in the "alt text" description part
+of the image object in the Slides presentation.
 
 # TODOs
 
-- [ ] re-set the alt text / description
 - [ ] proper installation
 - [ ] example / readme on usage
+- [ ] `add_image` -- insert an image to a given slide
+- [ ] `id_images` -- find images in the presentation and figure out which files they are,
+      annotating them in the Description field
+- [ ] error handling of all GAPI requests
+- [ ] LICENSE file
+- [ ] get presentation by name, not just by ID
 
 
 # Privacy policy
